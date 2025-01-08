@@ -1,0 +1,272 @@
+---
+title: "Economic Indicators analysis"
+output: html_document
+date: "2025-01-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+# Dataset analysis
+```{r}
+all_econ_data = read.csv('./Key_Economic_Indicators.csv')
+colnames(all_econ_data)
+head(all_econ_data)
+```
+
+```{r}
+# Load necessary library
+library(dplyr)
+
+# Arrange data by Year and Month for proper differencing
+all_econ_data <- all_econ_data %>%
+  arrange(Year, Month)
+
+# Calculate month-over-month differences for all numeric columns
+# Exclude 'Year' and 'Month' from differencing
+data_diff <- all_econ_data %>%
+  mutate(across(-c(Year, Month), ~ . - lag(.), .names = "diff_{col}"))
+
+# View the resulting dataset
+head(data_diff)
+```
+#### Now that we have the differences compared to the previous month as well as the original values, lets look at some correlations. I have chosen the CCI, CPI, Unemployment rate, Home prices, and Energy prices as the target variables to do analysis on.
+
+# Correlations
+```{r}
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+
+# Assume your dataset is called 'data_diff' (with differenced values)
+# Specify your target variables
+target_vars <- c("Consumer.Confidence.Index.US", "Unemployment.TX", 
+                 "Existing.Single.Family.Home.Price.TX", 
+                 "Retail.Gasoline.Price.TX", 
+                 "Consumer.Price.Index.TX")
+```
+
+```{r}
+plot_correlation <- function(target_var, data, threshold = 0) {
+  # Filter to remove NA values for the target variable
+  filtered_data <- data %>%
+    select(all_of(target_var), everything())
+    
+  
+  # Calculate the correlation matrix
+  cor_matrix <- cor(filtered_data, use = "pairwise.complete.obs")
+  
+  # Convert correlation matrix to long format for filtering
+  cor_df <- as.data.frame(as.table(cor_matrix))
+  colnames(cor_df) <- c("Var1", "Var2", "Correlation")
+  
+  # Filter correlations by threshold
+  cor_df <- cor_df %>%
+    filter(Var1 == target_var & abs(Correlation) > threshold) %>%
+    arrange(desc(abs(Correlation)))
+  
+  # Create the plot
+  ggplot(cor_df, aes(x = Var2, y = Correlation, fill = Correlation)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+    theme_minimal() +
+    ggtitle(paste("Significant Correlations for", target_var)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) + # Rotate x-axis labels
+    xlab("Variables") +
+    ylab("Correlation")
+}
+
+# Generate plots for each target variable
+plots <- list()
+for (target in target_vars) {
+  plots[[target]] <- plot_correlation(target, data_diff)
+}
+
+# Print all plots
+for (plot_name in names(plots)) {
+  print(plots[[plot_name]])
+}
+
+```
+#### There are clearly a lot of variables here and as a result the graph look quite clustered up. To get a better visualization lets limit it so that variables only variables with abs(corr) > .2 show up. This helps us better see which variables are most correlated
+
+```{r}
+plots <- list()
+for (target in target_vars) {
+  plots[[target]] <- plot_correlation(target, data_diff, .3)
+}
+
+# Print all plots
+for (plot_name in names(plots)) {
+  print(plots[[plot_name]])
+}
+```
+#### This is much better for our visualization but maybe lets order it by the magnitude of the correlation to better see which specific ones are important for each target variable
+
+```{r}
+plot_correlation <- function(target_var, data, threshold = 0) {
+  # Filter to remove NA values for the target variable
+  filtered_data <- data %>%
+    select(all_of(target_var), everything())
+    
+  
+  # Calculate the correlation matrix
+  cor_matrix <- cor(filtered_data, use = "pairwise.complete.obs")
+  
+  # Convert correlation matrix to long format for filtering
+  cor_df <- as.data.frame(as.table(cor_matrix))
+  colnames(cor_df) <- c("Var1", "Var2", "Correlation")
+  
+  # Filter correlations by threshold
+  cor_df <- cor_df %>%
+    filter(Var1 == target_var & abs(Correlation) > threshold & Var2 != target_var) %>%
+    arrange(desc(Correlation))
+  
+  # Reorder Var2 for plotting
+  cor_df$Var2 <- factor(cor_df$Var2, levels = cor_df$Var2)
+  
+  # Create the plot
+  ggplot(cor_df, aes(x = Var2, y = Correlation, fill = Correlation)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+    theme_minimal() +
+    ggtitle(paste("Significant Correlations for", target_var)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) + # Rotate x-axis labels
+    xlab("Variables") +
+    ylab("Correlation")
+}
+
+# Generate plots for each target variable
+plots <- list()
+for (target in target_vars) {
+  plots[[target]] <- plot_correlation(target, all_econ_data, .3)
+}
+
+# Print all plots
+for (plot_name in names(plots)) {
+  print(plots[[plot_name]])
+}
+```
+## Correlation with Year
+#### I clearly overlooked the Year variable in these correlations and did not take it out but it appears as a significant correlator to 3 out of 5 of the target variables. So out of curiosity lets graph each of them as compred to their average value for that year.
+```{r}
+library(tidyr)
+
+yearly_avg <- all_econ_data %>%
+  group_by(Year) %>%
+  summarise(across(all_of(target_vars), mean, na.rm = TRUE)) %>%
+  pivot_longer(-Year, names_to = "Variable", values_to = "Average")
+
+# Plot yearly averages for each target variable
+ggplot(yearly_avg, aes(x = Year, y = Average, color = Variable, group = Variable)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(
+    title = "Yearly Averages of Target Variables",
+    x = "Year",
+    y = "Average Value",
+    color = "Variable"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+#### Although this might make it seem like only the house prices have a true correlation, I belive this is because house prices are huge compared to the other variables. So how about lets standardize the values in each each column so that we can better see this change through the years
+
+```{r}
+# Standardize the target variables
+all_econ_data_standardized <- all_econ_data %>%
+  mutate(across(all_of(target_vars), ~ (.-mean(., na.rm = TRUE)) / sd(., na.rm = TRUE), 
+                .names = "std_{col}"))
+
+# Calculate yearly averages for standardized variables
+yearly_avg_std <- all_econ_data_standardized %>%
+  group_by(Year) %>%
+  summarise(across(starts_with("std_"), mean, na.rm = TRUE)) %>%
+  pivot_longer(-Year, names_to = "Variable", values_to = "Average") %>%
+  mutate(Variable = gsub("std_", "", Variable))  # Clean variable names for plot
+
+# Plot yearly averages for standardized variables
+ggplot(yearly_avg_std, aes(x = Year, y = Average, color = Variable, group = Variable)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(
+    title = "Yearly Averages of Standardized Target Variables",
+    x = "Year",
+    y = "Standardized Average (z-scores)",
+    color = "Variable"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+#### Well it does make sense that house prices and the CPI would increase with the years and it can also be seen here on the graph. But it still doesn't make sense why unemployment a correlation because it seems like most of them fluctuate through the years.And it intuitively makes sense because the unemployment rate and CCI should fluctuate as they fluctuate with the economy, but I guess gasoline prices also fluctuates and from what we see on the graph it moves quite similarly to the unemployment rate. 
+
+
+# PCA
+#### Another way to look at correlations is to perform PCA and extract the variables that seem to contribute the most to the variance in the target variables hence the ones that have the largest impact on the target variable. To make things a bit simpler I will only vizualize the first 2 PCs but these 2 should be able to explain majority of the variance in the dataset. Also just like before in order to avoid a cluster of all the features I will only consider features that have a correlation higher than a specified threshold starting with threshold=0.3
+
+```{r}
+library(factoextra)
+
+perform_pca_with_inline_visualization <- function(data, target_vars, cor_threshold = 0.5) {
+  # Initialize a list to store PCA results for each target variable
+  pca_results <- list()
+  
+  for (target_var in target_vars) {
+    
+    # Subset data for pairwise complete cases with the target variable
+    target_data <- data[, c(target_var, setdiff(colnames(data), target_vars))]
+    
+    # Compute the correlation matrix using pairwise.complete.obs
+    cor_matrix <- cor(target_data, use = "pairwise.complete.obs")
+    
+    # Filter variables based on correlation threshold with the target variable
+    target_correlations <- cor_matrix[, target_var, drop = FALSE]  # Correlations with the target variable
+    vars_to_include <- rownames(target_correlations)[abs(target_correlations[, 1]) >= cor_threshold]
+    vars_to_include <- setdiff(vars_to_include, target_var)
+
+    
+    if (length(vars_to_include) < 2) {
+      warning(paste("Not enough variables meet the correlation threshold for", target_var, ". Skipping PCA."))
+      next
+    }
+    
+    # Subset the correlation matrix to include only selected variables
+    filtered_cor_matrix <- cor_matrix[vars_to_include, vars_to_include]
+    
+    # Perform PCA on the filtered correlation matrix
+    pca_result <- prcomp(filtered_cor_matrix, scale. = FALSE)
+    
+    # Store the PCA result in the list
+    pca_results[[target_var]] <- list(
+      pca = pca_result,
+      explained_variance = summary(pca_result)$importance[2, ] # Proportion of variance explained
+    )
+    
+    # Visualization
+    plot_title <- paste("PCA for", target_var, "(Cor threshold:", cor_threshold, ")")
+    pca_plot <- fviz_pca_var(
+      pca_result,
+      title = plot_title,
+      repel = TRUE,
+      col.var = "cos2", # Coloring by contribution
+      gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07")
+    )
+    
+    # Print the plot inline
+    print(pca_plot)
+  }
+  
+  return(pca_results)
+}
+
+# Example usage with a correlation threshold of 0.6
+pca_results <- perform_pca_with_inline_visualization(all_econ_data, target_vars, cor_threshold = 0.5)
+
+```
+Let's analyze CCI Index's Principal Component(PC) graph as it has many features still left on the graph whilst not being as clustered as the other ones. We see 2 principal components on the graph with PC1 being on the Y axis and PC2 being on the x axis. For CCI PC1 explains 83.5% of the variance and PC2 explains 12.7% as is shown by the x and y axis labels on the graphs meaning together they explain 76.6+12.4=96.2% of the variance seen in the CCI for Texas. We can also see that the Unemployment rate in US contributes positively to both of these PCs' values as it appears in the first quadrant meaning it has a positive component for both PCs. Similarly all the features appearing in the 3rd quadrant of this PCA graph all contribute negatively to both of the PCs' values. On this graph we can also see that features that have high positive correlation with each other tend to have smaller angles(close to 0) between their component lines and features with high negative correlation tend to point in the opposite directions(180 degrees between them). For example all the Nonfarm Employment vectors have a very small angle between them and it makes sense that they would all be highly correlated with each other.
