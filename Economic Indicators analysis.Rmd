@@ -48,10 +48,10 @@ library(reshape2)
 
 # Assume your dataset is called 'data_diff' (with differenced values)
 # Specify your target variables
-target_vars <- c("Consumer.Confidence.Index.US", "Unemployment.TX", 
+target_vars <- c( "Unemployment.TX", 
                  "Existing.Single.Family.Home.Price.TX", 
                  "Retail.Gasoline.Price.TX", 
-                 "Consumer.Price.Index.TX")
+                 "Consumer.Price.Index.TX", "Consumer.Confidence.Index.US")
 ```
 
 ```{r}
@@ -271,4 +271,4 @@ perform_pca_with_inline_visualization <- function(data, target_vars, cor_thresho
 pca_results <- perform_pca_with_inline_visualization(all_econ_data, target_vars, cor_threshold = 0.5)
 
 ```
-Let's analyze CCI Index's Principal Component(PC) graph as it has many features still left on the graph whilst not being as clustered as the other ones. We see 2 principal components on the graph with PC1 being on the Y axis and PC2 being on the x axis. For CCI PC1 explains 83.5% of the variance and PC2 explains 12.7% as is shown by the x and y axis labels on the graphs meaning together they explain 76.6+12.4=96.2% of the variance seen in the CCI for Texas. We can also see that the Unemployment rate in US contributes positively to both of these PCs' values as it appears in the first quadrant meaning it has a positive component for both PCs. Similarly all the features appearing in the 3rd quadrant of this PCA graph all contribute negatively to both of the PCs' values. On this graph we can also see that features that have high positive correlation with each other tend to have smaller angles(close to 0) between their component lines and features with high negative correlation tend to point in the opposite directions(180 degrees between them). For example all the Nonfarm Employment vectors have a very small angle between them and it makes sense that they would all be highly correlated with each other.
+Let's analyze CCI Index's Principal Component(PC) graph as it has many features still left on the graph whilst not being as clustered as the other ones. We see 2 principal components on the graph with PC1 being on the Y axis and PC2 being on the x axis. For CCI PC1 explains 83.5% of the variance and PC2 explains 12.7% as is shown by the x and y axis labels on the graphs meaning together they explain 76.6+12.4=96.2% of the variance seen in the CCI for Texas. We can also see that the Unemployment rate in US contributes positively to both of these PCs' values as it appears in the first quadrant meaning it has a positive component for both PCs. Similarly all the features appearing in the 3rd quadrant of this PCA graph all contribute negatively to both of the PCs' values. On this graph we can also see that features that have high positive correlation with each other tend to have smaller angles(close to 0) between their component lines and features with high negative correlation tend to point in the opposite directions(180 degrees between them). For example all the Nonfarm Employment vectors in quadrant 2 and 3 have a very small angle between them and it makes sense that they would all be highly correlated with each other.
